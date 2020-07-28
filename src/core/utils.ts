@@ -1,6 +1,5 @@
 import * as Joi from '@hapi/joi';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
 const NODE_ENV = {
   DEVELOPMENT: 'development',
   PRODUCTION: 'production',
@@ -13,10 +12,11 @@ export const ValidateEnvironmentVariables = () => {
   DotEnvOptions();
   const Schema = Joi.object({
     NODE_ENV: Joi.string()
-      .valid('development','production').required(),
+      .valid('development', 'production')
+      .required(),
     PORT: Joi.string().required(),
     POSTGRES_USER: Joi.string().required(),
-    POSTGRES_PASSWORD: Joi.string().allow(""),
+    POSTGRES_PASSWORD: Joi.string().allow(''),
     POSTGRES_DB: Joi.string().required(),
     POSTGRES_HOST: Joi.string().required(),
     POSTGRES_PORT: Joi.string().required(),
@@ -24,10 +24,9 @@ export const ValidateEnvironmentVariables = () => {
   const { error, value } = Schema.validate(process.env, {
     stripUnknown: true,
   });
-  console.log(process.env.POSTGRES_USER)
   if (error) {
     console.error(error);
-    throw new Error('Check environment variables!'); 
+    throw new Error('Check environment variables!');
   }
   return value;
 };
@@ -35,4 +34,8 @@ export const ValidateEnvironmentVariables = () => {
 export enum TransactionType {
   TRANSFER = 'transfer',
   REFILL = 'refill',
+}
+
+export enum IsolationLevel {
+  SERIALIZABLE = 'SERIALIZABLE'
 }

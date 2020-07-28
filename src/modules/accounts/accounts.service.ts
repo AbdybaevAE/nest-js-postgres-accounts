@@ -1,4 +1,9 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  HttpException,
+  HttpStatus,
+  SerializeOptions,
+} from '@nestjs/common';
 import { createTransferDto } from './dto/create-transfer.dto';
 import { createPaymentDto } from './dto/create-payment.dto';
 import { Connection } from 'typeorm';
@@ -6,7 +11,7 @@ import { User } from '../users/user.entity';
 import { Transaction } from '../transactions/transactions.entity';
 import { Payment } from '../payments/payments.entity';
 import { Account } from './accounts.entity';
-import { TransactionType } from '../../core/utils';
+import { TransactionType, IsolationLevel } from '../../core/utils';
 import { GetSuccess, TPromiseResponse } from '../../core/response';
 import { CreatePaymentRO, CreateTransferRO } from './accounts.intefaces';
 // import {User} from '../users/user.entity';
@@ -17,11 +22,11 @@ export class AccountsService {
   async createTransfer(
     dto: createTransferDto,
   ): TPromiseResponse<CreateTransferRO> {
+    const { userFrom, userTo, amount } = dto;
     const queryRunner = this.connection.createQueryRunner();
     try {
-      const { userFrom, userTo, amount } = dto;
       await queryRunner.connect();
-      await queryRunner.startTransaction();
+      await queryRunner.startTransaction(IsolationLevel.SERIALIZABLE);
       const userFromEntity = await queryRunner.manager
         .getRepository(User)
         .findOne(userFrom);
@@ -32,7 +37,7 @@ export class AccountsService {
       if (!userFromEntity || !userToEntity)
         throw new HttpException(
           {
-            message: `User with id - ${userFromEntity} or user with id - ${userToEntity} do not exist.`,
+            message: `Invalid user emails.`,
           },
           HttpStatus.BAD_REQUEST,
         );
@@ -43,17 +48,19 @@ export class AccountsService {
       const accountToEntity = await queryRunner.manager
         .getRepository(Account)
         .findOne({ user: userToEntity });
-      if (!accountFromEntity || !accountToEntity)
+      if (!accountFromEntity || !accountToEntity) {
+        console.error(dto);
         throw new HttpException(
           {
-            message: ':(',
+            message: 'Server internal error.',
           },
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
+      }
       if (accountFromEntity.balance < amount)
         throw new HttpException(
           {
-            message: 'Not enough money to make transaction.',
+            message: 'Not enough money to make transfer.',
           },
           HttpStatus.FORBIDDEN,
         );
@@ -73,7 +80,6 @@ export class AccountsService {
       await queryRunner.release();
       return this.buildTransferRO(newTransaction);
     } catch (e) {
-      console.error(e);
       await queryRunner.rollbackTransaction();
       await queryRunner.release();
       throw e;
@@ -87,7 +93,7 @@ export class AccountsService {
     const queryRunner = this.connection.createQueryRunner();
     try {
       await queryRunner.connect();
-      await queryRunner.startTransaction();
+      await queryRunner.startTransaction(IsolationLevel.SERIALIZABLE);
       const user = await queryRunner.manager
         .getRepository(User)
         .findOne({ email });
@@ -101,20 +107,25 @@ export class AccountsService {
         .findOne({ paymentId });
       if (payment)
         throw new HttpException(
-          { message: `Payment with id - ${paymentId} is already exists.` },
+          { message: `Payment ${paymentId} is already exists.` },
           HttpStatus.BAD_REQUEST,
         );
       const account = await queryRunner.manager.getRepository(Account).findOne({
         user,
       });
-      if (!account)
-        throw new HttpException({}, HttpStatus.INTERNAL_SERVER_ERROR);
+      if (!account) {
+        console.error(dto);
+        throw new HttpException(
+          { message: 'Server internal error.' },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
 
       account.balance += amount;
 
       const newPayment = new Payment();
       newPayment.paymentId = paymentId;
-      newPayment.userId = user;
+      newPayment.user = user;
       newPayment.amount = amount;
 
       const newTransaction = new Transaction();
@@ -130,7 +141,6 @@ export class AccountsService {
       await queryRunner.release();
       return this.buildPaymentRO(newPayment);
     } catch (e) {
-      console.error(e);
       await queryRunner.rollbackTransaction();
       await queryRunner.release();
       throw e;

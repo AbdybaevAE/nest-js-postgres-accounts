@@ -7,6 +7,7 @@ import {
     JoinColumn,
     OneToMany,
     ManyToMany,
+    ManyToOne,
   } from 'typeorm';
   import { User } from '../users/user.entity';
   import { TransactionType } from '../../core/utils';
@@ -15,10 +16,10 @@ import {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @ManyToMany(type => User)
+    @ManyToOne(() => User)
     accountFrom: User;
   
-    @ManyToMany(type => User)
+    @ManyToOne(() => User)
     accountTo: User;
   
     @Column({
